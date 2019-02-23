@@ -31,6 +31,7 @@ DS1624::DS1624()
 { 
   // Class instance needs to be initialized
   _initialized = false;
+  _wireInitialized = false;
   
   // Default true
   _temperatureValueValid = true;
@@ -43,6 +44,7 @@ DS1624::DS1624(uint8_t addressByPins)
 {
   // Class instance needs to be initialized
   _initialized = false;
+  _wireInitialized = false;
   
   // Default true
   _temperatureValueValid = true;
@@ -54,7 +56,10 @@ DS1624::DS1624(uint8_t addressByPins)
 void DS1624::Init()
 {
   // Start I2C communication on default SCK, SDA ports for I2C master
-  Wire.begin();
+  if(!_wireInitialized)
+  {
+    Wire.begin();
+  }
 
   // Configure sensor
   Wire.beginTransmission(_address);
@@ -70,6 +75,7 @@ void DS1624::Init()
   
   // Set initialization flag
   _initialized = true;
+	_wireInitialized = true;
   
   // Start conversion
   Wire.beginTransmission(_address);
@@ -142,3 +148,35 @@ float DS1624::ReadConvertedValue()
   temperature += ((float)lsw) / 16.0; 
   return temperature;
 }
+
+void DS1624::writeByte(unsigned char addr,unsigned char value)
+{
+  if(!_wireInitialized)
+  {
+    Wire.begin();
+    _wireInitialized = true;
+  }
+  Wire.beginTransmission(_address);
+  Wire.write(0x17);
+  Wire.write(addr);
+  Wire.write(value);
+  Wire.endTransmission();
+}
+
+unsigned char DS1624::readByte(unsigned char addr, bool & isValid)
+{
+  if(!_wireInitialized)
+  {
+    Wire.begin();
+    _wireInitialized = true;
+  }
+  Wire.beginTransmission(_address);
+  Wire.write(0x17);
+  Wire.write(addr);
+  Wire.requestFrom(_address,(uint8_t)1);
+  isValid = Wire.available();
+  unsigned char result = isValid ? Wire.read() : '?';
+  Wire.endTransmission();
+  return result;
+}
+

@@ -35,8 +35,11 @@ private:
   // Stores the actual address
   uint8_t _address;
   
-  // Flag set when class is initialized
+  // Flag set when temperature measurement is initialized
   bool _initialized;
+  
+  // Flag to detect, when Wire library is initialized
+  bool _wireInitialized;
   
   // Flag that stores if last temperature value was valid
   bool _temperatureValueValid;
@@ -57,6 +60,12 @@ public:
   
   // Gets temperature in centigrade degrees
   void GetTemperature(float & readValue, bool & isValid);
+  
+  // Write one byte to EEPROM
+  void writeByte(unsigned char addr, unsigned char value);
+  
+  // Read one byte from EEPROM
+  unsigned char readByte(unsigned char addr, bool & isValid);
 };
 
 #endif //DS1624_Arduino_Library
