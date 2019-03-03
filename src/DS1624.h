@@ -58,14 +58,24 @@ public:
   // physical address pin connections
   DS1624(uint8_t addressByPins);
 
+  // Constructor, that enables Wire's library initialization
+  // by application itself, not by DS1624 library
+  DS1624(uint8_t addressByPins, bool customWire);
+
   // Gets temperature in centigrade degrees
   void GetTemperature(float & readValue, bool & isValid);
 
   // Write one byte to EEPROM
-  void writeByte(unsigned char addr, unsigned char value);
+  bool writeByte(unsigned char addr, unsigned char value);
 
   // Read one byte from EEPROM
   unsigned char readByte(unsigned char addr, bool & isValid);
+
+  // Read some bytes from EEPROM
+  unsigned char readBlock(unsigned char addr, unsigned char len, unsigned char*data);
+
+  // Write some bytes to EEPROM
+  unsigned char writeBlock(unsigned char addr, unsigned char len, unsigned char*data);
 
   // print memory content in human-readable format
   // if startAddress<0 prints all memory content

@@ -29,28 +29,27 @@ SOFTWARE.
 
 DS1624::DS1624()
 {
-  // Class instance needs to be initialized
-  _initialized = false;
-  _wireInitialized = false;
-
-  // Default true
-  _temperatureValueValid = true;
-
   // a2 <- ground; a1 <- ground; a0 <- ground
-  DS1624(0x00);
+  DS1624(0x00, false);
 }
 
 DS1624::DS1624(uint8_t addressByPins)
 {
+  // by default, Wire library should be started from DS1624 library
+  DS1624(addressByPins, false);
+}
+
+DS1624::DS1624(uint8_t addressByPins, bool customWire)
+{
   // Class instance needs to be initialized
-  _initialized = false;
-  _wireInitialized = false;
+  _initialized = customWire;
+  _wireInitialized = customWire;
 
   // Default true
   _temperatureValueValid = true;
 
   // Base address least significant bits will be a2, a1, a0 respectively
-  _address = 0x48 + (addressByPins & 0xf8);
+  _address = 0x48 + (addressByPins & 0x7);
 }
 
 void DS1624::Init()
@@ -75,7 +74,7 @@ void DS1624::Init()
 
   // Set initialization flag
   _initialized = true;
-	_wireInitialized = true;
+  _wireInitialized = true;
 
   // Start conversion
   Wire.beginTransmission(_address);
@@ -149,7 +148,7 @@ float DS1624::ReadConvertedValue()
   return temperature;
 }
 
-void DS1624::writeByte(unsigned char addr,unsigned char value)
+bool DS1624::writeByte(unsigned char addr, unsigned char value)
 {
   if(!_wireInitialized)
   {
@@ -160,10 +159,13 @@ void DS1624::writeByte(unsigned char addr,unsigned char value)
   Wire.write(0x17);
   Wire.write(addr);
   Wire.write(value);
-  Wire.endTransmission();
+  bool result = Wire.endTransmission() == 0;
+//Serial.print("write[");Serial.print(addr);Serial.print("]=");Serial.println(value,HEX);
+  _delay_ms(50);
+  return result;
 }
 
-unsigned char DS1624::readByte(unsigned char addr, bool & isValid)
+unsigned char DS1624::writeBlock(unsigned char addr, unsigned char len, unsigned char*data)
 {
   if(!_wireInitialized)
   {
@@ -173,11 +175,81 @@ unsigned char DS1624::readByte(unsigned char addr, bool & isValid)
   Wire.beginTransmission(_address);
   Wire.write(0x17);
   Wire.write(addr);
-  Wire.requestFrom(_address,(uint8_t)1);
+  for(unsigned char w = 0; w < len; ++w)
+  {
+    Wire.write(data[w]);
+  }
+  bool result = Wire.endTransmission() == 0;
+
+  // From datasheet:
+  // During the programming cycle the DS1624 does not acknowledge
+  // any further accesses to the device until the programming
+  // cycle is complete (no longer than 50ms).
+  _delay_ms(50);
+
+  return result ? len : 0;
+
+}
+
+unsigned char DS1624::readByte(unsigned char addr, bool & isValid)
+{
+  if(!_wireInitialized)
+  {
+    Wire.begin();
+    _wireInitialized = true;
+  }
+
+  // this is a workaround, request is "cached" somewhere and I need to request each byte twice
+  // TODO: find the reason on such strange behaviour
+  Wire.beginTransmission(_address);
+  Wire.write(0x17);
+  Wire.write(addr);
+  Wire.requestFrom(_address,(uint8_t)1,(uint8_t)1);
+  while(Wire.available()) Wire.read();
+  Wire.endTransmission();
+
+  Wire.beginTransmission(_address);
+  Wire.write(0x17);
+  Wire.write(addr);
+  Wire.requestFrom(_address,(uint8_t)1,(uint8_t)1);
   isValid = Wire.available();
   unsigned char result = isValid ? Wire.read() : '?';
-  Wire.endTransmission();
+
+  // Read possible other data
+  while(Wire.available()) Wire.read();
+
+  if(Wire.endTransmission() != 0)
+    isValid = false;
   return result;
+}
+
+unsigned char DS1624::readBlock(unsigned char addr, unsigned char len, unsigned char*data)
+{
+  if(!_wireInitialized)
+  {
+    Wire.begin();
+    _wireInitialized = true;
+  }
+
+  // this is a workaround, request is "cached" somewhere and I need to request each byte twice
+  // TODO: find the reason on such strange behaviour
+  Wire.beginTransmission(_address);
+  Wire.write(0x17);
+  Wire.write(addr);
+  Wire.requestFrom(_address,(uint8_t)1,(uint8_t)1);
+  while(Wire.available()) Wire.read();
+  Wire.endTransmission();
+
+  unsigned char r = 0;
+  Wire.beginTransmission(_address);
+  Wire.write(0x17);
+  Wire.write(addr);
+  Wire.requestFrom(_address,(uint8_t)len,(uint8_t)1);
+  while (Wire.available())
+  {
+    data[r++] = Wire.read();
+  }
+  return Wire.endTransmission() == 0 ? r : 0;
 }
 
 void DS1624::printMem(Stream & _serial,int startAddress, unsigned char len)
@@ -186,7 +258,7 @@ void DS1624::printMem(Stream & _serial,int startAddress, unsigned char len)
   if(startAddress < 0)
   {
     // int required! Otherwice, this loop will never stop!
-    for(int addr = 0;addr <= 255;++addr)
+    for(int addr = 0; addr <= 255; ++addr)
     {
       // TODO: try to create bulk transmission (by 8 bytes simultaneously)
       unsigned char data = readByte((unsigned char)addr, valid);

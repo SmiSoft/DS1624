@@ -24,36 +24,38 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 *****************************************************************************/
 
-// Supported commands:
+/*****************************************************************************
+Supported commands:
 
-// Empty command - author's information
+Empty command - author's information
 
-// read address length
-// reads length (decimal) bytes starting with address (decimal). limited to 256 bytes. Prints data to Serial in human-readable format.
-// Example:
-// read 0 4
-// Response:
-// data
+read address length
+reads length (decimal) bytes starting with address (decimal). limited to 256 bytes. Prints data to Serial in human-readable format.
+Example:
+read 0 4
+Response:
+data
 
-// dump address length
-// dumps length (decimal) bytes starting with address (decimal), and prints it to Serial using hexadecimal presentation.
-// Example:
-// dump 5 4
-// Response:
-// FF 02 FF 01
+dump address length
+dumps length (decimal) bytes starting with address (decimal), and prints it to Serial using hexadecimal presentation.
+Example:
+dump 5 4
+Response:
+FF 02 FF 01
 
-// write address data-hex
-// writes data, presented in hexadecimal format to address (decimal). Has no answer. Command length is limited to 80 chars (up to 20 bytes at once)
-// Example:
-// write 100 01 FA FB 02
-// WARNING! Data overflow is not tested!
+write address data-hex
+writes data, presented in hexadecimal format to address (decimal). No answer. Command length is limited to 80 chars (up to 20 bytes at once)
+Example:
+write 100 01 FA FB 02
+WARNING! Data overflow is not tested!
+*****************************************************************************/
 
 #include <DS1624.h>
 // https://github.com/SmiSoft/SerialConsole
 #include <SerialConsole.hpp>
 
 // Sensor's all address pins connected to Vcc
-DS1624 ds1624(0B111);
+DS1624 ds1624(0B111,true);
 
 // create Console object for default serial port
 SerialConsole serialConsole(Serial, 80, "#>");
@@ -62,7 +64,6 @@ void setup()
 {
   Serial.begin(9600);
   Wire.begin();
-  Wire.setClock(100000); // only my own case - long wires
 }
 
 // convert single hexadecimal character into integer value
@@ -81,7 +82,7 @@ void loop()
 {
   if(const char*command = serialConsole.avail())
   {
-    byte address, len;
+    int address, len;
     if(command[0] == 0)
     {
       Serial.println("DS1624 demonstration program by Python <smisoft@rambler.ru>");
@@ -91,6 +92,11 @@ void loop()
       bool valid;
       while(len-- > 0){
         unsigned char data = ds1624.readByte(address++, valid);
+        if(!valid)
+        {
+        	Serial.print("Invalid value read from I2C bus");
+        	break;
+        }
         Serial.write(data);
       }
       Serial.println();
@@ -106,6 +112,11 @@ void loop()
           cnt = 1;
         }
         unsigned char data = ds1624.readByte(address++, valid);
+        if(!valid)
+        {
+        	Serial.print("Invalid value read from I2C bus");
+        	break;
+        }
         if(data < 16)
         {
           Serial.print('0');
@@ -117,6 +128,7 @@ void loop()
     }
     else if(strncmp(command, "write ", 6) == 0)
     {
+      // TODO: Speed up writing process by using blockWrite
       const char*temp = command + 6;
       address = 0;
       byte mode = 0; // 0 - seek address, 1 - in address
@@ -154,7 +166,11 @@ void loop()
             if(mode == 1)
             {
               mode = 0;
-              ds1624.writeByte(address++, data);
+              if(!ds1624.writeByte(address++, data))
+              {
+                Serial.println("Invalid value write to I2C bus");
+                break;
+              }
             }
           }
           else if(isxdigit(*temp))
