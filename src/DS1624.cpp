@@ -160,7 +160,6 @@ bool DS1624::writeByte(unsigned char addr, unsigned char value)
   Wire.write(addr);
   Wire.write(value);
   bool result = Wire.endTransmission() == 0;
-//Serial.print("write[");Serial.print(addr);Serial.print("]=");Serial.println(value,HEX);
   _delay_ms(50);
   return result;
 }
